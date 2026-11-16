@@ -4,6 +4,13 @@ Prototipo académico funcional en **Django**, SQLite y JavaScript, adaptable a c
 
 ## Iniciar en este equipo
 
+En Windows, haz doble clic en **`iniciar.bat`**. Requiere Python 3.12 o posterior
+instalado y disponible en PATH. La primera ejecución crea `.venv` e instala las
+dependencias con internet; después prepara la base, carga la demo e inicia el
+servidor. Abre la dirección indicada y mantén la ventana abierta mientras lo usas.
+
+También puedes ejecutar los comandos manualmente:
+
 ```powershell
 python manage.py migrate
 python manage.py seed_demo
@@ -66,7 +73,7 @@ python -m venv .venv
 - Crítica: **más de 15 minutos** continuos de lecturas sobre −15 °C, conforme a la actividad 3 de la evaluación actual. Exactamente 15 minutos continúa en vigilancia.
 - Ruptura: **más de 15 minutos** continuos de lecturas sobre −12 °C. Exactamente 15 minutos todavía no constituye ruptura según RN03.
 - Una lectura menor o igual al umbral correspondiente reinicia su temporizador. Se utiliza la hora de captura, incluso si las lecturas llegan desordenadas.
-- Más de seis minutos entre muestras reinicia ambos temporizadores y se informa la discontinuidad. No se confirma una anomalía continua usando únicamente lecturas aisladas.
+- Los huecos mayores de seis minutos se cuentan en `telemetry_gaps` y `gaps`. Si ambos extremos superan el umbral, se asume continuidad conservadora para ese temporizador; una lectura igual o inferior lo reinicia. `thermal_status(readings, now=...)` permite estimar un episodio abierto durante el silencio final; no crea nuevas muestras.
 - Las lecturas tardías reconstruyen episodios sin repetir la notificación del mismo intervalo. Los registros invalidados o fusionados se conservan como sustituidos para auditoría.
 - El certificado grafica muestras disponibles, sin inventar lecturas minuto a minuto, conforme a la aclaración del informe final.
 
@@ -94,7 +101,6 @@ Las pruebas cubren límites térmicos, recuperación, recepción desordenada, au
 - `tracking/shop.py`: catálogo, pedidos, pagos simulados y asignación gerencial a rutas.
 - `core/thermal.py`: módulo B compartido por el servidor y el cliente local.
 - `offline_agent/` y `agente_local.py`: módulo A con SQLite, cifrado y reintentos; cliente de referencia.
-- `docs/ACTIVIDAD_3.md`: alcance, controles OWASP, demostración y limitaciones de despliegue.
 - `ddl/server_sqlite.sql` y `offline_agent/schema.sql`: scripts DDL sin datos.
 - `tracking/views.py`: pantallas, API, exportación y certificado.
 - `templates/`: acceso, gerencia, conductor y recepción del cliente.
@@ -103,4 +109,24 @@ Las pruebas cubren límites térmicos, recuperación, recepción desordenada, au
 
 El panel administrativo de Django está en `/admin/`. Para usarlo crea una cuenta propia con `python manage.py createsuperuser`; las cuentas demo no tienen permisos administrativos.
 
-Las entregas propias guardadas offline pueden sincronizarse en días posteriores, conservando su hora de captura en las versiones nuevas. Las rutas visibles siguen siendo las del día actual. Consulta [las correcciones de la auditoría](docs/CORRECCIONES_AUDITORIA.md) para detalles y pruebas de estos casos de borde.
+Las entregas propias guardadas offline pueden sincronizarse en días posteriores, conservando su hora de captura en las versiones nuevas. Las rutas visibles siguen siendo las del día actual.
+
+## Evidencias reproducibles de Actividad 3
+
+```powershell
+.venv\Scripts\python generar_evidencias.py
+```
+
+Ejecuta cuatro pruebas de integracion con SQLite temporal y la API Django:
+recuperacion tras desconexion simulada, reintento con ACK perdido sin duplicados,
+limite de 15/20 minutos y lote tardio con recuperacion. No modifica los datos demo.
+Genera cuatro imagenes PNG, el registro de ejecucion, JSON y una guia en
+`output/evidencias_actividad3/`. Las imagenes son laminas de resultados ejecutados,
+no capturas de la interfaz web. Los fallos de transporte y tiempos se simulan;
+el correo se comprueba en memoria.
+
+El script para el anexo está en `generar_evidencias.py` y los cuatro escenarios
+están en `tracking/test_evidencias.py`, ambos incluidos en el repositorio.
+Ejecuta el comando anterior después de preparar el entorno con `iniciar.bat`
+o con los pasos de instalación manual. Los resultados de `output/` se generan
+localmente y permanecen excluidos de Git.
