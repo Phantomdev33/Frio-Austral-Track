@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %}Portal de clientes · Frío-Austral{% endblock %}
+{% block content %}
+<header class="client-header"><a class="brand" href="/"><span class="brand-icon">❄</span><span>Frío-Austral<small>T R A C K</small></span></a><div class="client-account"><span>{{ request.user.get_full_name }}</span><form action="/salir/" method="post">{% csrf_token %}<button class="btn outline compact">Cerrar sesión</button></form></div></header>
+<nav class="client-tabs" aria-label="Portal del cliente"><a href="{% url 'catalog' %}" {% if page == 'shop' %}aria-current="page"{% endif %}>Catálogo y nuevo pedido</a><a href="{% url 'orders' %}" {% if page == 'orders' %}aria-current="page"{% endif %}>Mis pedidos</a><a href="{% url 'client' %}" {% if page == 'receipts' %}aria-current="page"{% endif %}>Entregas y certificados</a></nav>
+<main class="client-main">{% for message in messages %}<p role="status" class="shop-message {{ message.tags }}">{{ message }}</p>{% endfor %}{% block portal %}{% endblock %}</main>
+{% endblock %}
