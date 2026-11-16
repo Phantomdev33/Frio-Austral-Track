@@ -13,20 +13,46 @@ class SampleContinuityTests(SimpleTestCase):
     def samples(self,minutes,temperature=-14):
         start=timezone.now()-timedelta(hours=3)
         return [SimpleNamespace(temperature=temperature,captured_at=start+timedelta(minutes=m)) for m in minutes]
-    def test_gap_is_not_a_confirmed_anomaly(self):
-        for temperature in [-14,-11]:
-            rows=self.samples([0,30],temperature)
+    def test_hot_endpoints_preserve_excursion_across_gap(self):
+        for temperature, expected in [(-14, 'critical'), (-11, 'rupture')]:
+            rows=self.samples([0,5,485],temperature)
             status=thermal_status(rows)
-            self.assertEqual(status['status'],'watch');self.assertEqual(status['minutes'],0)
-            self.assertEqual(status['telemetry_gaps'],1);self.assertEqual(list(thermal_events(rows)),[])
-    def test_timer_can_restart_and_confirm_after_gap(self):
-        rows=self.samples([0,30,35,40,45,50])
-        self.assertEqual(thermal_status(rows)['status'],'critical')
-        events=list(thermal_events(rows));self.assertEqual(len(events),1)
-        self.assertEqual(events[0]['started_at'],rows[1].captured_at)
+            self.assertEqual(status['status'],expected)
+            self.assertEqual(status['minutes'],485)
+            self.assertEqual(status['telemetry_gaps'],1)
+            self.assertEqual(status['gaps'],1)
+            events=list(thermal_events(rows))
+            self.assertEqual(len(events),1 if temperature == -14 else 2)
+            self.assertEqual(events[0]['started_at'],rows[0].captured_at)
+            self.assertEqual(events[0]['captured_at'],rows[-1].captured_at)
+            self.assertEqual(events[0]['temperature'],temperature)
+    def test_recovery_after_gap_resets_timers(self):
+        rows=self.samples([0,5]) + self.samples([485],-20)
+        status=thermal_status(rows)
+        self.assertEqual(status['status'],'normal')
+        self.assertEqual(status['minutes'],0)
+        self.assertEqual(status['telemetry_gaps'],1)
+        self.assertEqual(list(thermal_events(rows)),[])
+    def test_silence_only_advances_with_explicit_now(self):
+        for temperature, expected in [(-14,'critical'),(-11,'rupture')]:
+            rows=self.samples([0,5],temperature)
+            self.assertEqual(thermal_status(rows)['status'],'watch')
+            self.assertEqual(thermal_status(rows,now=rows[0].captured_at+timedelta(minutes=40))['status'],expected)
+            self.assertEqual(thermal_status(rows,now=rows[0].captured_at)['minutes'],5)
+            self.assertEqual(list(thermal_events(rows)),[])
+    def test_gap_preserves_each_threshold_independently(self):
+        rows=self.samples([0,5],-11)+self.samples([30],-14)
+        status=thermal_status(rows)
+        self.assertEqual(status['status'],'critical')
+        self.assertEqual(status['minutes'],30)
+        self.assertEqual(status['rupture_minutes'],0)
     def test_six_minutes_tolerance_is_inclusive(self):
-        self.assertEqual(thermal_status(self.samples([0,6,12,18]))['status'],'critical')
-        self.assertEqual(thermal_status(self.samples([0,6.01,12.02,18.03]))['status'],'watch')
+        self.assertEqual(thermal_status(self.samples([0,6,12,18]))['telemetry_gaps'],0)
+        self.assertEqual(thermal_status(self.samples([0,6.01,12.02,18.03]))['telemetry_gaps'],3)
+    def test_empty_readings_include_gap_counters(self):
+        status=thermal_status([])
+        self.assertEqual(status['gaps'],0)
+        self.assertEqual(status['telemetry_gaps'],0)
     def test_recovered_final_sample_does_not_erase_previous_confirmed_episode(self):
         rows=self.samples([0,5,10,15,20]);rows.append(SimpleNamespace(temperature=-20,captured_at=rows[-1].captured_at+timedelta(minutes=5)))
         self.assertEqual(thermal_status(rows)['status'],'normal');self.assertEqual(len(list(thermal_events(rows))),1)
@@ -47,11 +73,11 @@ class LateReadingRegressionTests(TestCase):
         alert.refresh_from_db();self.assertTrue(alert.acknowledged);self.assertFalse(alert.superseded)
     def test_merging_episodes_does_not_send_another_notification(self):
         self.add([0,5,10,15,20,40,45,50,55,60]);evaluate_trip(self.trip)
-        self.assertEqual(len(mail.outbox),2)
+        self.assertEqual(len(mail.outbox),1)
         self.add([25,30,35]);evaluate_trip(self.trip)
-        self.assertEqual(len(mail.outbox),2)
+        self.assertEqual(len(mail.outbox),1)
         self.assertEqual(self.trip.alerts.filter(superseded=False).count(),1)
-        self.assertEqual(self.trip.alerts.filter(superseded=True).count(),1)
+        self.assertEqual(self.trip.alerts.filter(superseded=True).count(),0)
     def test_new_anomaly_after_recovery_still_notifies(self):
         self.add([0,5,10,15,20]);evaluate_trip(self.trip)
         self.add([25],-20);self.add([30,35,40,45,50]);evaluate_trip(self.trip)

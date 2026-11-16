@@ -5,15 +5,23 @@ const samples=(minutes,temperature=-14)=>minutes.map(m=>({temperature,captured_a
 const status=rows=>globalThis.FrioThermal.status(rows);
 assert.equal(status(samples([0,5,10,15])).status,'watch');
 assert.equal(status(samples([0,5,10,15,20])).status,'critical');
-assert.equal(status(samples([0,30])).status,'watch');
-assert.equal(status(samples([0,30])).minutes,0);
+assert.equal(status(samples([0,30])).status,'critical');
+assert.equal(status(samples([0,30])).minutes,30);
 assert.equal(status(samples([0,30])).telemetry_gaps,1);
-assert.equal(status(samples([0,30],-11)).status,'watch');
+assert.equal(status(samples([0,30],-11)).status,'rupture');
 assert.equal(status(samples([0,30,35,40,45,50])).status,'critical');
 assert.equal(status(samples([0,6,12,18])).status,'critical');
-assert.equal(status(samples([0,6.01,12.02,18.03])).status,'watch');
+assert.equal(status(samples([0,6.01,12.02,18.03])).status,'critical');
 assert.equal(status(samples([20,5,0,10,15])).status,'critical');
 assert.equal(status(samples([0,5,10,15,20],-11)).status,'rupture');
 assert.equal(status(samples([0,5,10,15,20],-15)).minutes,0);
 assert.equal(status([]).status,'unknown');
 console.log('PASS: browser thermal boundaries, gaps, timer restart, rupture and out-of-order samples.');
+
+assert.equal(status([...samples([0,5]),...samples([485],-20)]).status,'normal');
+assert.equal(status(samples([0,5,485])).minutes,485);
+assert.equal(status([...samples([0,5],-11),...samples([30],-14)]).rupture_minutes,0);
+assert.equal(globalThis.FrioThermal.status(samples([0,5]),new Date(start+40*60000)).status,'critical');
+assert.equal(globalThis.FrioThermal.status(samples([0,5],-11),new Date(start+40*60000)).status,'rupture');
+assert.equal(globalThis.FrioThermal.status(samples([0,5]),new Date(start)).minutes,5);
+assert.equal(status([]).gaps,0);
